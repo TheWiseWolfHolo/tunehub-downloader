@@ -1,0 +1,6 @@
+name = "tunehub-downloader"
+compatibility_date = "2026-03-09"
+pages_build_output_dir = "public"
+
+[vars]
+APP_NAME = "TuneHub Downloader"

@@ -1,0 +1,10 @@
+.dev.vars
+.env
+.wrangler
+node_modules
+dist
+coverage
+npm-debug.log*
+pnpm-debug.log*
+__pycache__/
+*.pyc

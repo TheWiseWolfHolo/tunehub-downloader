@@ -1,0 +1,10 @@
+{
+  "name": "tunehub-downloader",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx wrangler pages dev public",
+    "deploy": "npx wrangler pages deploy public",
+    "cf:login": "npx wrangler login"
+  }
+}

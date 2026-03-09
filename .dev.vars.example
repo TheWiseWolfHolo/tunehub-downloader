@@ -1,0 +1,4 @@
+TUNEHUB_SITE_USERNAME=replace-with-your-login-username
+TUNEHUB_SITE_PASSWORD=replace-with-your-login-password
+TUNEHUB_AUTH_SECRET=replace-with-a-long-random-secret
+TUNEHUB_API_KEY=replace-with-your-tunehub-api-key

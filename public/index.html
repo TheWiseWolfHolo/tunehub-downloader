@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#081120" />
+    <title>TuneHub 音乐下载</title>
+    <meta name="description" content="TuneHub 音乐下载面板，支持聚合搜索、解析与直接下载。" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="aurora aurora-a" aria-hidden="true"></div>
+    <div class="aurora aurora-b" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <div class="brand-group">
+          <a class="brand" href="/" aria-label="TuneHub Downloader 首页">
+            <span class="brand-mark">TH</span>
+            <span>
+              <strong>TuneHub</strong>
+              <small>聚合搜索 · 解析下载</small>
+            </span>
+          </a>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="session-pill" id="sessionPill" data-auth-state="guest">
+            <span class="session-dot" aria-hidden="true"></span>
+            <span id="sessionText">未登录</span>
+          </div>
+          <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换主题">
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">◐</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell app-shell">
+      <section class="panel login-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Access</p>
+            <h1>登录后开始使用</h1>
+          </div>
+          <div class="status-chip" id="authChip">LOCKED</div>
+        </div>
+
+        <form class="auth-inline" id="authForm" novalidate>
+          <label>
+            <span>账号</span>
+            <input id="usernameInput" name="username" type="text" autocomplete="username" placeholder="请输入站内账号" />
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="passwordInput" name="password" type="password" autocomplete="current-password" placeholder="请输入站内密码" />
+          </label>
+          <button class="button button-primary" type="submit" id="loginButton">登录</button>
+        </form>
+
+        <div class="session-bar hidden" id="activeSession">
+          <div>
+            <strong id="activeUser">已登录</strong>
+            <p id="activeExpiry">会话有效期</p>
+          </div>
+          <button class="button button-secondary" id="logoutButton" type="button">退出登录</button>
+        </div>
+
+        <p class="auth-summary" id="authSummary">当前未登录，接口处于锁定状态。</p>
+      </section>
+
+      <section class="workspace-grid">
+        <section class="panel search-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Search</p>
+              <h2>聚合搜索</h2>
+            </div>
+          </div>
+
+          <div class="platform-switch" id="searchPlatformSwitch" aria-label="搜索平台切换">
+            <button type="button" class="platform-chip is-active" data-platform="all">全部</button>
+            <button type="button" class="platform-chip" data-platform="kuwo">酷我</button>
+            <button type="button" class="platform-chip" data-platform="netease">网易云</button>
+            <button type="button" class="platform-chip" data-platform="qq">QQ 音乐</button>
+          </div>
+
+          <form class="search-row" id="searchForm">
+            <input id="keywordInput" type="text" name="keyword" placeholder="输入歌名、歌手或关键词" autocomplete="off" />
+            <button class="button button-primary" id="searchButton" type="submit">搜索</button>
+          </form>
+
+          <div class="search-meta" id="searchMeta">登录后可搜索。</div>
+          <div class="result-list" id="searchResults">
+            <div class="empty-state">
+              <strong>还没有结果</strong>
+              <p>输入关键词并搜索后，结果会显示在这里。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel detail-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Parse</p>
+              <h2>下载面板</h2>
+            </div>
+          </div>
+
+          <div class="selected-card" id="selectedTrack">
+            <div class="empty-state">
+              <strong>尚未选择歌曲</strong>
+              <p>从左侧结果里点选，平台和歌曲 ID 会自动带到右侧。</p>
+            </div>
+          </div>
+
+          <form class="parse-form" id="parseForm">
+            <div class="form-grid">
+              <label>
+                <span>平台</span>
+                <select id="platformSelect" name="platform">
+                  <option value="kuwo">酷我音乐</option>
+                  <option value="netease">网易云音乐</option>
+                  <option value="qq">QQ 音乐</option>
+                </select>
+              </label>
+
+              <label>
+                <span>歌曲 ID</span>
+                <input id="songIdInput" name="songId" type="text" autocomplete="off" placeholder="搜索后自动填充，或手动输入" />
+              </label>
+            </div>
+
+            <fieldset>
+              <legend>音质</legend>
+              <div class="quality-grid" id="qualityGrid">
+                <button type="button" class="quality-chip" data-quality="128k">128k</button>
+                <button type="button" class="quality-chip is-active" data-quality="320k">320k</button>
+                <button type="button" class="quality-chip" data-quality="flac">FLAC</button>
+                <button type="button" class="quality-chip" data-quality="flac24bit">Hi-Res</button>
+              </div>
+              <p class="helper-text" id="qualityHelper">默认 320k。</p>
+            </fieldset>
+
+            <button class="button button-primary button-block" id="parseButton" type="submit">
+              解析并生成下载链接
+            </button>
+          </form>
+
+          <div class="parse-output hidden" id="parseOutput">
+            <div class="download-card">
+              <img class="download-cover" id="downloadCover" alt="歌曲封面" />
+              <div class="download-copy">
+                <div class="mini-label" id="downloadPlatform">平台</div>
+                <h3 id="downloadTitle">歌曲名</h3>
+                <p class="download-meta" id="downloadMeta">歌手 · 专辑</p>
+                <div class="fact-row" id="factRow"></div>
+              </div>
+            </div>
+
+            <div class="download-actions">
+              <a class="button button-primary" id="downloadButton" href="#">下载文件</a>
+              <button class="button button-secondary" id="copyLyricsButton" type="button">复制歌词</button>
+            </div>
+
+            <details class="lyrics-panel">
+              <summary>查看歌词</summary>
+              <pre class="lyrics-block" id="lyricsPreview"></pre>
+            </details>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
