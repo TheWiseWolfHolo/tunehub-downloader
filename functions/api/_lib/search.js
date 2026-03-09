@@ -23,6 +23,25 @@ async function fetchJson(url, init = {}) {
   return response.json();
 }
 
+function normalizeNeteaseSong(item) {
+  const privilegeMaxBr = Number(item.privilege?.maxbr || 0);
+  return {
+    ...platformMeta("netease"),
+    id: String(item.id || ""),
+    name: item.name || "未知歌曲",
+    artist: (item.artists || item.ar || []).map((artist) => artist.name).filter(Boolean).join(", "),
+    album: item.album?.name || item.al?.name || item.originSongSimpleData?.albumMeta?.name || "",
+    duration: durationLabel(Math.floor((item.duration || item.dt || 0) / 1000)),
+    subtitle: "",
+    cover: String(item.album?.picUrl || item.al?.picUrl || "").replace(/^http:\/\//i, "https://"),
+    quality_hint: qualityHints({
+      flac: Boolean(item.hr || item.sq || privilegeMaxBr >= 999000),
+      q320: Boolean(item.h || privilegeMaxBr >= 320000),
+      q128: Boolean(item.m || item.l || privilegeMaxBr >= 128000),
+    }),
+  };
+}
+
 export async function searchPlatform(platform, keyword, page = 1, limit = 10) {
   if (platform === "kuwo") {
     return searchKuwo(keyword, page, limit);
@@ -111,42 +130,91 @@ async function searchKuwo(keyword, page, limit) {
 }
 
 async function searchNetease(keyword, page, limit) {
-  const url = new URL("https://music.163.com/api/search/get/web");
-  url.searchParams.set("s", keyword);
-  url.searchParams.set("type", "1");
-  url.searchParams.set("offset", String((page - 1) * limit));
-  url.searchParams.set("limit", String(limit));
-  url.searchParams.set("csrf_token", "");
+  const baseHeaders = {
+    referer: "https://music.163.com/",
+    origin: "https://music.163.com",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    accept: "application/json,text/plain,*/*",
+  };
+  const offset = String((page - 1) * limit);
+  const limitText = String(limit);
 
-  const payload = await fetchJson(url.toString(), {
-    headers: {
-      referer: "https://music.163.com/",
-      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      accept: "application/json,text/plain,*/*",
+  const attempts = [
+    async () => {
+      const url = new URL("https://music.163.com/api/search/get/web");
+      url.searchParams.set("s", keyword);
+      url.searchParams.set("type", "1");
+      url.searchParams.set("offset", offset);
+      url.searchParams.set("limit", limitText);
+      url.searchParams.set("csrf_token", "");
+
+      const payload = await fetchJson(url.toString(), {
+        headers: baseHeaders,
+      });
+
+      return {
+        total: Number(payload.result?.songCount || 0),
+        songs: payload.result?.songs || [],
+      };
     },
-  });
+    async () => {
+      const payload = await fetchJson("https://music.163.com/api/cloudsearch/pc", {
+        method: "POST",
+        headers: {
+          ...baseHeaders,
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          s: keyword,
+          type: "1",
+          offset,
+          limit: limitText,
+        }),
+      });
 
-  const songs = payload.result?.songs || [];
-  const items = songs.map((item) => ({
-    ...platformMeta("netease"),
-    id: String(item.id || ""),
-    name: item.name || "未知歌曲",
-    artist: (item.artists || item.ar || []).map((artist) => artist.name).filter(Boolean).join(", "),
-    album: item.album?.name || item.al?.name || "",
-    duration: durationLabel(Math.floor((item.duration || item.dt || 0) / 1000)),
-    subtitle: "",
-    cover: String(item.album?.picUrl || item.al?.picUrl || "").replace(/^http:\/\//i, "https://"),
-    quality_hint: qualityHints({
-      flac: Boolean(item.hr || item.sq || Number(item.privilege?.maxbr || 0) >= 999000),
-      q320: Boolean(item.h || Number(item.privilege?.maxbr || 0) >= 320000),
-      q128: Boolean(item.m || item.l || Number(item.privilege?.maxbr || 0) >= 128000),
-    }),
-  }));
+      return {
+        total: Number(payload.result?.songCount || 0),
+        songs: payload.result?.songs || [],
+      };
+    },
+    async () => {
+      const url = new URL("http://music.163.com/api/search/get/web");
+      url.searchParams.set("s", keyword);
+      url.searchParams.set("type", "1");
+      url.searchParams.set("offset", offset);
+      url.searchParams.set("limit", limitText);
+      url.searchParams.set("csrf_token", "");
+
+      const payload = await fetchJson(url.toString(), {
+        headers: baseHeaders,
+      });
+
+      return {
+        total: Number(payload.result?.songCount || 0),
+        songs: payload.result?.songs || [],
+      };
+    },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const payload = await attempt();
+      if ((payload.songs || []).length > 0) {
+        return {
+          platform: "netease",
+          total: payload.total,
+          items: payload.songs.map(normalizeNeteaseSong),
+        };
+      }
+    } catch {
+      // Keep falling back until one endpoint returns usable data.
+    }
+  }
 
   return {
     platform: "netease",
-    total: Number(payload.result?.songCount || items.length),
-    items,
+    total: 0,
+    items: [],
   };
 }
 
