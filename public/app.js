@@ -249,8 +249,8 @@ function renderAuthUi() {
   if (authed) {
     renderWorkspaceHeader();
   } else {
-    elements.accessTitle.textContent = "登录后进入音乐工作台";
-    elements.accessCopy.textContent = "聚合搜索、平台回填、音质推荐和下载链路集中在一个干净工作台里。";
+    elements.accessTitle.textContent = "进入工作台";
+    elements.accessCopy.textContent = "保持低调、简洁和直接。登录后再进入完整工作台。";
     elements.authSummary.textContent = "使用站内账号解锁聚合搜索、解析与下载。";
   }
 }
