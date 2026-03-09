@@ -34,6 +34,9 @@ const state = {
   searchPlatform: "all",
   searchResults: [],
   searchStats: null,
+  searchPage: 1,
+  searchLimit: resolveSearchLimit(),
+  searchTotal: 0,
   selectedTrack: null,
   availableQualities: ["128k", "320k", "flac"],
   recommendedQuality: "flac",
@@ -64,6 +67,11 @@ const elements = {
   searchButton: document.getElementById("searchButton"),
   searchMeta: document.getElementById("searchMeta"),
   searchResults: document.getElementById("searchResults"),
+  searchPagination: document.getElementById("searchPagination"),
+  prevPageButton: document.getElementById("prevPageButton"),
+  nextPageButton: document.getElementById("nextPageButton"),
+  paginationStatus: document.getElementById("paginationStatus"),
+  paginationSummary: document.getElementById("paginationSummary"),
   detailCopy: document.getElementById("detailCopy"),
   selectedTrack: document.getElementById("selectedTrack"),
   parseForm: document.getElementById("parseForm"),
@@ -84,6 +92,8 @@ const elements = {
   toastRegion: document.getElementById("toastRegion"),
 };
 
+let searchViewportTimer = 0;
+
 function resolveInitialTheme() {
   const stored = localStorage.getItem(STORAGE_KEYS.theme);
   if (stored === "light" || stored === "dark") {
@@ -100,6 +110,29 @@ function applyTheme(theme) {
 
 function toggleTheme() {
   applyTheme(state.theme === "dark" ? "light" : "dark");
+}
+
+function resolveSearchLimit() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  if (width <= 640) {
+    return height >= 900 ? 5 : 4;
+  }
+  if (width <= 1080) {
+    return height >= 960 ? 6 : 5;
+  }
+  if (height >= 1120) {
+    return 8;
+  }
+  if (height >= 920) {
+    return 7;
+  }
+  return 6;
+}
+
+function getSearchTotalPages() {
+  return Math.max(1, Math.ceil(Math.max(state.searchTotal, 0) / state.searchLimit));
 }
 
 function showToast(title, description) {
@@ -227,7 +260,7 @@ function renderWorkspaceHeader() {
     elements.headerNote.textContent = `当前为 ${PLATFORM_LABELS[state.searchPlatform]} 模式，继续输入关键词即可刷新结果。`;
     return;
   }
-  elements.headerNote.textContent = "默认聚合搜索，点击结果会自动回填，并优先推荐最高可用音质。";
+  elements.headerNote.textContent = "默认聚合搜索，点选结果后会自动同步平台、ID 与建议音质。";
 }
 
 async function refreshSession() {
@@ -249,9 +282,9 @@ function renderAuthUi() {
   if (authed) {
     renderWorkspaceHeader();
   } else {
-    elements.accessTitle.textContent = "进入工作台";
-    elements.accessCopy.textContent = "保持低调、简洁和直接。登录后再进入完整工作台。";
-    elements.authSummary.textContent = "使用站内账号解锁聚合搜索、解析与下载。";
+    elements.accessTitle.textContent = "欢迎回来";
+    elements.accessCopy.textContent = "登录后继续使用。";
+    elements.authSummary.textContent = "输入账号和密码后登录。";
   }
 }
 
@@ -264,7 +297,7 @@ async function handleLogin(event) {
     return showToast("登录失败", "账号和密码都不能为空。");
   }
 
-  setButtonBusy(elements.loginButton, true, "进入中...");
+  setButtonBusy(elements.loginButton, true, "登录中...");
   try {
     const payload = await requestJson("/api/login", {
       method: "POST",
@@ -277,11 +310,12 @@ async function handleLogin(event) {
     renderSearchMeta();
     renderSelectedTrack();
     renderParseResult();
-    showToast("已登录", "工作台已解锁，直接输入关键词开始搜索。");
+    renderSearchPagination();
+    showToast("已登录", "现在可以直接搜索并下载歌曲。");
   } catch (error) {
     showToast("登录失败", error.message);
   } finally {
-    setButtonBusy(elements.loginButton, false, "进入工作台");
+    setButtonBusy(elements.loginButton, false, "登录");
   }
 }
 
@@ -291,6 +325,8 @@ async function handleLogout() {
     state.session = null;
     state.searchResults = [];
     state.searchStats = null;
+    state.searchPage = 1;
+    state.searchTotal = 0;
     state.selectedTrack = null;
     state.parseResult = null;
     elements.platformSelect.value = "kuwo";
@@ -299,6 +335,7 @@ async function handleLogout() {
     renderAuthUi();
     renderSearchMeta();
     renderSearchResults();
+    renderSearchPagination();
     renderSelectedTrack();
     renderParseResult();
     showToast("已退出", "会话已清除。");
@@ -326,6 +363,8 @@ function renderSearchMeta() {
   }
 
   const chips = [];
+  chips.push(`<span class="tiny-pill">第 ${state.searchPage} / ${getSearchTotalPages()} 页</span>`);
+  chips.push(`<span class="tiny-pill">每页 ${state.searchLimit} 条</span>`);
   if (state.searchPlatform === "all" && state.searchStats.groups) {
     ["kuwo", "netease", "qq"].forEach((platform) => {
       const count = Number(state.searchStats.groups?.[platform] || 0);
@@ -337,9 +376,31 @@ function renderSearchMeta() {
   }
 
   elements.searchMeta.innerHTML = `
-    <span class="search-meta-copy">${escapeHtml(platformLabel)} · ${escapeHtml(state.searchStats.keyword)} · ${state.searchResults.length} 条</span>
+    <span class="search-meta-copy">${escapeHtml(platformLabel)} · ${escapeHtml(state.searchStats.keyword)} · 共 ${state.searchTotal} 条</span>
     ${chips.join("")}
   `;
+}
+
+function renderSearchPagination() {
+  const hasSearchContext = Boolean(state.session && state.searchStats?.keyword);
+  elements.searchPagination.classList.toggle("hidden", !hasSearchContext);
+
+  if (!hasSearchContext) {
+    return;
+  }
+
+  const totalPages = getSearchTotalPages();
+  const currentPage = Math.min(Math.max(state.searchPage, 1), totalPages);
+  const hasResults = state.searchTotal > 0;
+  const start = hasResults ? (currentPage - 1) * state.searchLimit + 1 : 0;
+  const end = hasResults ? Math.min(currentPage * state.searchLimit, state.searchTotal) : 0;
+
+  elements.prevPageButton.disabled = currentPage <= 1;
+  elements.nextPageButton.disabled = currentPage >= totalPages || !hasResults;
+  elements.paginationStatus.textContent = `第 ${currentPage} / ${totalPages} 页`;
+  elements.paginationSummary.textContent = hasResults
+    ? `显示 ${start}-${end} 条，共 ${state.searchTotal} 条`
+    : `共 0 条结果`;
 }
 
 function renderSearchResults() {
@@ -383,7 +444,7 @@ function renderSearchResults() {
         <div class="result-meta">${escapeHtml(item.artist)}${item.album ? ` · ${escapeHtml(item.album)}` : ""}</div>
         <div class="tiny-pill-row">${hints.join("")}</div>
       </div>
-      <button class="button button-secondary select-track-button" type="button">回填</button>
+      <button class="button button-secondary select-track-button" type="button">选用</button>
     `;
 
     const choose = () => selectTrack(item);
@@ -409,13 +470,13 @@ function selectTrack(item) {
   renderSearchResults();
   renderSelectedTrack();
   renderParseResult();
-  showToast("已回填", `${item.platformLabel} 的《${item.name}》已带到右侧，默认音质已切到 ${QUALITY_LABELS[state.recommendedQuality]}。`);
+  showToast("已同步", `${item.platformLabel} 的《${item.name}》已同步到右侧，默认音质已切到 ${QUALITY_LABELS[state.recommendedQuality]}。`);
 }
 
 function renderSelectedTrack() {
   if (!state.selectedTrack) {
-    elements.detailCopy.textContent = "选择歌曲后会自动填入平台、ID 和建议音质。";
-    elements.selectedTrack.innerHTML = `<div class="empty-state"><strong>尚未选择歌曲</strong><p>从左侧结果里点选，平台和歌曲 ID 会自动带到右侧。</p></div>`;
+    elements.detailCopy.textContent = "选择歌曲后会自动同步平台、ID 和建议音质。";
+    elements.selectedTrack.innerHTML = `<div class="empty-state"><strong>尚未选择歌曲</strong><p>从左侧结果里点选后，平台、歌曲 ID 和建议音质会自动同步到右侧。</p></div>`;
     return;
   }
 
@@ -484,10 +545,11 @@ function renderParseResult() {
 
 async function handleSearch(event) {
   event.preventDefault();
-  await runSearch();
+  state.searchPage = 1;
+  await runSearch({ page: 1 });
 }
 
-async function runSearch() {
+async function runSearch({ page = state.searchPage, busy = true, silentError = false } = {}) {
   if (!state.session) {
     return showToast("请先登录", "登录后才能搜索。");
   }
@@ -497,30 +559,85 @@ async function runSearch() {
     return showToast("缺少关键词", "请输入歌名、歌手或关键词。");
   }
 
-  setButtonBusy(elements.searchButton, true, "搜索中...");
+  const targetPage = Math.max(Number(page) || 1, 1);
+
+  if (busy) {
+    setButtonBusy(elements.searchButton, true, "搜索中...");
+  }
   try {
     const payload = await requestJson(
-      `/api/search?platform=${encodeURIComponent(state.searchPlatform)}&keyword=${encodeURIComponent(keyword)}&page=1&limit=12`,
+      `/api/search?platform=${encodeURIComponent(state.searchPlatform)}&keyword=${encodeURIComponent(keyword)}&page=${targetPage}&limit=${state.searchLimit}`,
       { method: "GET" },
     );
     state.searchResults = payload.items || [];
+    state.searchPage = Number(payload.page || targetPage);
+    state.searchTotal = Number(payload.total || state.searchResults.length);
     state.searchStats = {
       keyword,
-      total: payload.total || state.searchResults.length,
+      total: state.searchTotal,
       groups: payload.groups || null,
     };
     renderWorkspaceHeader();
     renderSearchMeta();
     renderSearchResults();
+    renderSearchPagination();
   } catch (error) {
     state.searchResults = [];
+    state.searchPage = targetPage;
+    state.searchTotal = 0;
     state.searchStats = { keyword, total: 0, groups: null };
     renderSearchMeta();
     renderSearchResults();
-    showToast("搜索失败", error.message);
+    renderSearchPagination();
+    if (!silentError) {
+      showToast("搜索失败", error.message);
+    }
   } finally {
-    setButtonBusy(elements.searchButton, false, "搜索");
+    if (busy) {
+      setButtonBusy(elements.searchButton, false, "搜索");
+    }
   }
+}
+
+async function goToSearchPage(nextPage) {
+  if (!state.searchStats?.keyword) {
+    return;
+  }
+
+  const targetPage = Math.min(Math.max(nextPage, 1), getSearchTotalPages());
+  if (targetPage === state.searchPage) {
+    return;
+  }
+
+  await runSearch({ page: targetPage });
+}
+
+async function refreshSearchLimitForViewport() {
+  const nextLimit = resolveSearchLimit();
+  if (nextLimit === state.searchLimit) {
+    return;
+  }
+
+  state.searchLimit = nextLimit;
+
+  if (!state.session || !state.searchStats?.keyword) {
+    renderSearchMeta();
+    renderSearchPagination();
+    return;
+  }
+
+  const nextPage = Math.min(state.searchPage, Math.max(1, Math.ceil(state.searchTotal / nextLimit)));
+  await runSearch({ page: nextPage, busy: false, silentError: true });
+}
+
+function handleViewportChange() {
+  window.clearTimeout(searchViewportTimer);
+  searchViewportTimer = window.setTimeout(() => {
+    refreshSearchLimitForViewport().catch(() => {
+      renderSearchMeta();
+      renderSearchPagination();
+    });
+  }, 180);
 }
 
 function clearSelectedTrackIfNeeded() {
@@ -604,13 +721,16 @@ function bindPlatformSwitch() {
       state.searchPlatform = button.dataset.platform;
       state.searchResults = [];
       state.searchStats = null;
+      state.searchPage = 1;
+      state.searchTotal = 0;
       renderSearchPlatformSwitch();
       renderWorkspaceHeader();
       renderSearchMeta();
       renderSearchResults();
+      renderSearchPagination();
 
       if (state.session && elements.keywordInput.value.trim()) {
-        await runSearch();
+        await runSearch({ page: 1 });
       }
     });
   });
@@ -635,6 +755,7 @@ function initialize() {
   renderSearchPlatformSwitch();
   renderSearchMeta();
   renderSearchResults();
+  renderSearchPagination();
   renderSelectedTrack();
   renderParseResult();
   syncQualityState({ track: null, platform: elements.platformSelect.value, autoSelect: true });
@@ -643,10 +764,17 @@ function initialize() {
   elements.authForm.addEventListener("submit", handleLogin);
   elements.logoutButton.addEventListener("click", handleLogout);
   elements.searchForm.addEventListener("submit", handleSearch);
+  elements.prevPageButton.addEventListener("click", () => {
+    goToSearchPage(state.searchPage - 1);
+  });
+  elements.nextPageButton.addEventListener("click", () => {
+    goToSearchPage(state.searchPage + 1);
+  });
   elements.parseForm.addEventListener("submit", handleParse);
   elements.copyLyricsButton.addEventListener("click", copyLyrics);
   elements.platformSelect.addEventListener("change", handlePlatformChange);
   elements.songIdInput.addEventListener("input", handleSongIdInput);
+  window.addEventListener("resize", handleViewportChange);
   bindPlatformSwitch();
   elements.qualityGrid.querySelectorAll(".quality-chip").forEach((button) => {
     button.addEventListener("click", () => setQuality(button.dataset.quality));

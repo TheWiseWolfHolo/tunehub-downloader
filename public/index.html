@@ -34,42 +34,36 @@
             <span class="auth-mark">HM</span>
             <div class="auth-title-wrap">
               <p class="eyebrow">Holo Music</p>
-              <h1 id="accessTitle">进入工作台</h1>
+              <h1 id="accessTitle">欢迎回来</h1>
             </div>
           </div>
 
           <p class="auth-hero-copy" id="accessCopy">
-            保持低调、简洁和直接。登录后再进入完整工作台。
+            登录后继续使用。
           </p>
-
-          <div class="auth-caption-row">
-            <span class="tiny-pill auth-tiny-pill">Private Access</span>
-            <span class="tiny-pill auth-tiny-pill">Clean Workspace</span>
-            <span class="tiny-pill auth-tiny-pill">Direct Flow</span>
-          </div>
         </section>
 
         <section class="panel auth-card">
           <div class="auth-card-head">
             <div>
-              <p class="eyebrow">Access</p>
-              <h2>解锁下载</h2>
+              <p class="eyebrow">Login</p>
+              <h2>登录</h2>
             </div>
             <div class="status-chip" id="authChip">LOCKED</div>
           </div>
 
-          <p class="auth-summary" id="authSummary">使用站内账号解锁聚合搜索、解析与下载。</p>
+          <p class="auth-summary" id="authSummary">输入账号和密码后登录。</p>
 
           <form class="auth-stack" id="authForm" novalidate>
             <label>
               <span>账号</span>
-              <input id="usernameInput" name="username" type="text" autocomplete="username" placeholder="请输入站内账号" />
+              <input id="usernameInput" name="username" type="text" autocomplete="username" placeholder="账号" />
             </label>
             <label>
               <span>密码</span>
-              <input id="passwordInput" name="password" type="password" autocomplete="current-password" placeholder="请输入站内密码" />
+              <input id="passwordInput" name="password" type="password" autocomplete="current-password" placeholder="密码" />
             </label>
-            <button class="button button-primary button-block" type="submit" id="loginButton">进入工作台</button>
+            <button class="button button-primary button-block" type="submit" id="loginButton">登录</button>
           </form>
         </section>
       </div>
@@ -86,7 +80,7 @@
                 <small>聚合搜索 · 解析下载</small>
               </span>
             </a>
-            <div class="header-note" id="headerNote">默认聚合搜索，点击结果会自动回填，并优先推荐最高可用音质。</div>
+            <div class="header-note" id="headerNote">默认聚合搜索，点选结果后会自动同步平台、ID 与建议音质。</div>
           </div>
 
           <div class="topbar-actions">
@@ -128,6 +122,14 @@
                 <p>输入关键词并搜索后，结果会显示在这里。</p>
               </div>
             </div>
+            <div class="search-pagination hidden" id="searchPagination">
+              <button class="button button-secondary pagination-button" id="prevPageButton" type="button">上一页</button>
+              <div class="pagination-meta">
+                <strong id="paginationStatus">第 1 / 1 页</strong>
+                <span id="paginationSummary">共 0 条结果</span>
+              </div>
+              <button class="button button-secondary pagination-button" id="nextPageButton" type="button">下一页</button>
+            </div>
           </section>
 
           <section class="panel detail-panel">
@@ -135,14 +137,14 @@
               <div>
                 <p class="eyebrow">Parse</p>
                 <h2>下载面板</h2>
-                <p class="panel-copy" id="detailCopy">选择歌曲后会自动填入平台、ID 和建议音质。</p>
+                <p class="panel-copy" id="detailCopy">选择歌曲后会自动同步平台、ID 和建议音质。</p>
               </div>
             </div>
 
             <div class="selected-card" id="selectedTrack">
               <div class="empty-state">
                 <strong>尚未选择歌曲</strong>
-                <p>从左侧结果里点选，平台和歌曲 ID 会自动带到右侧。</p>
+                <p>从左侧结果里点选后，平台、歌曲 ID 和建议音质会自动同步到右侧。</p>
               </div>
             </div>
 

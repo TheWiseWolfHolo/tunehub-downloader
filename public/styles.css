@@ -246,6 +246,11 @@ body[data-theme="dark"] .theme-icon-moon { opacity: 1; transform: translateY(0);
   min-height: 52px; border-radius: 999px; border: 1px solid transparent; padding: 0 20px;
   display: inline-flex; align-items: center; justify-content: center; font-weight: 600;
 }
+.button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  transform: none !important;
+}
 .button:hover, .platform-chip:hover, .quality-chip:hover, .theme-toggle:hover, .session-pill:hover { transform: translateY(-2px); }
 .button-primary { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 46%, #ffffff)); color: #fff; }
 .button-secondary { background: var(--panel-strong); border-color: var(--line); color: var(--text); }
@@ -271,7 +276,36 @@ body[data-theme="dark"] .theme-icon-moon { opacity: 1; transform: translateY(0);
 .search-row input { flex: 1; }
 .search-meta { min-height: 24px; margin: 14px 0 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .search-meta-copy { color: var(--text-soft); }
-.result-list { display: grid; gap: 12px; }
+.result-list { display: grid; gap: 12px; min-height: 240px; }
+.search-pagination {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--panel-strong) 90%, transparent);
+}
+.pagination-meta {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+.pagination-meta strong {
+  font-size: 0.96rem;
+}
+.pagination-meta span {
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+.pagination-button {
+  min-width: 116px;
+  min-height: 48px;
+  padding: 0 18px;
+}
 .result-card, .selected-card, .empty-state, .download-card, .lyrics-panel {
   border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--panel-strong);
 }
@@ -372,6 +406,10 @@ body[data-theme="dark"] .theme-icon-moon { opacity: 1; transform: translateY(0);
   }
   .form-grid { grid-template-columns: 1fr; }
   .button, .platform-chip, .quality-chip { width: 100%; }
+  .search-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .toast-region { left: 12px; right: 12px; bottom: 12px; }
   .toast { max-width: none; }
 }
