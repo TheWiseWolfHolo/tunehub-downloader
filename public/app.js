@@ -7,11 +7,25 @@ const PLATFORM_LABELS = {
   qq: "QQ 音乐",
 };
 
+const QUALITY_LABELS = {
+  "128k": "128k",
+  "320k": "320k",
+  flac: "FLAC",
+  flac24bit: "Hi-Res",
+};
+
 const QUALITY_META = {
-  "128k": "标准 MP3，兼容性最好。",
-  "320k": "高品质 MP3，默认推荐。",
-  flac: "无损 FLAC。",
-  flac24bit: "Hi-Res，若上游不支持会自动降级。",
+  "128k": "当前歌曲可用音质里最稳妥的一档。",
+  "320k": "高品质 MP3，兼顾体积和听感。",
+  flac: "无损 FLAC，适合作为默认高音质。",
+  flac24bit: "Hi-Res，当前歌曲若支持会优先选择。",
+};
+
+const QUALITY_ORDER = ["128k", "320k", "flac", "flac24bit"];
+const PLATFORM_MAX_QUALITY = {
+  kuwo: "flac",
+  netease: "flac24bit",
+  qq: "flac24bit",
 };
 
 const state = {
@@ -21,7 +35,9 @@ const state = {
   searchResults: [],
   searchStats: null,
   selectedTrack: null,
-  quality: "320k",
+  availableQualities: ["128k", "320k", "flac"],
+  recommendedQuality: "flac",
+  quality: "flac",
   parseResult: null,
 };
 
@@ -30,6 +46,11 @@ const elements = {
   themeToggle: document.getElementById("themeToggle"),
   sessionPill: document.getElementById("sessionPill"),
   sessionText: document.getElementById("sessionText"),
+  headerNote: document.getElementById("headerNote"),
+  loginPanel: document.querySelector(".login-panel"),
+  accessEyebrow: document.getElementById("accessEyebrow"),
+  accessTitle: document.getElementById("accessTitle"),
+  accessCopy: document.getElementById("accessCopy"),
   authChip: document.getElementById("authChip"),
   authSummary: document.getElementById("authSummary"),
   authForm: document.getElementById("authForm"),
@@ -46,6 +67,7 @@ const elements = {
   searchButton: document.getElementById("searchButton"),
   searchMeta: document.getElementById("searchMeta"),
   searchResults: document.getElementById("searchResults"),
+  detailCopy: document.getElementById("detailCopy"),
   selectedTrack: document.getElementById("selectedTrack"),
   parseForm: document.getElementById("parseForm"),
   platformSelect: document.getElementById("platformSelect"),
@@ -67,7 +89,9 @@ const elements = {
 
 function resolveInitialTheme() {
   const stored = localStorage.getItem(STORAGE_KEYS.theme);
-  if (stored === "light" || stored === "dark") return stored;
+  if (stored === "light" || stored === "dark") {
+    return stored;
+  }
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -82,7 +106,9 @@ function toggleTheme() {
 }
 
 function formatExpiry(timestamp) {
-  if (!timestamp) return "";
+  if (!timestamp) {
+    return "";
+  }
   const date = new Date(timestamp * 1000);
   return `有效至 ${date.toLocaleString("zh-CN", {
     hour12: false,
@@ -121,6 +147,103 @@ function setButtonBusy(button, busy, label) {
   button.textContent = label;
 }
 
+function qualityIndex(quality) {
+  return Math.max(QUALITY_ORDER.indexOf(quality), 0);
+}
+
+function clampQualityForPlatform(quality, platform) {
+  const platformMax = PLATFORM_MAX_QUALITY[platform] || "320k";
+  return QUALITY_ORDER[Math.min(qualityIndex(quality), qualityIndex(platformMax))];
+}
+
+function inferTrackMaxQuality(track, platform) {
+  if (track?.maxQuality) {
+    return clampQualityForPlatform(track.maxQuality, platform);
+  }
+
+  const hints = new Set(track?.quality_hint || []);
+  if (hints.has("Hi-Res")) {
+    return clampQualityForPlatform("flac24bit", platform);
+  }
+  if (hints.has("FLAC")) {
+    return clampQualityForPlatform("flac", platform);
+  }
+  if (hints.has("320k")) {
+    return clampQualityForPlatform("320k", platform);
+  }
+  if (hints.has("128k")) {
+    return "128k";
+  }
+
+  return PLATFORM_MAX_QUALITY[platform] || "320k";
+}
+
+function resolveAvailableQualities(track, platform) {
+  const maxQuality = inferTrackMaxQuality(track, platform);
+  const maxIndex = qualityIndex(maxQuality);
+  return QUALITY_ORDER.filter((_, index) => index <= maxIndex);
+}
+
+function updateQualityHelper() {
+  const recommended = QUALITY_LABELS[state.recommendedQuality];
+  const selected = QUALITY_LABELS[state.quality];
+  const selectedTrackName = state.selectedTrack?.name;
+
+  if (selectedTrackName) {
+    const autoCopy = `已按《${selectedTrackName}》自动建议最高可用音质：${recommended}。`;
+    if (state.quality === state.recommendedQuality) {
+      elements.qualityHelper.textContent = `${autoCopy} ${QUALITY_META[state.quality]}`;
+      return;
+    }
+    elements.qualityHelper.textContent = `${autoCopy} 当前手动切到了 ${selected}。`;
+    return;
+  }
+
+  elements.qualityHelper.textContent = `当前按平台默认最高档优先：${recommended}。${QUALITY_META[state.quality]}`;
+}
+
+function renderQualityState() {
+  elements.qualityGrid.querySelectorAll(".quality-chip").forEach((button) => {
+    const quality = button.dataset.quality;
+    const available = state.availableQualities.includes(quality);
+    button.disabled = !available;
+    button.classList.toggle("is-active", quality === state.quality);
+    button.classList.toggle("is-disabled", !available);
+    button.classList.toggle("is-recommended", available && quality === state.recommendedQuality);
+    button.setAttribute("aria-pressed", String(quality === state.quality));
+    button.title = available
+      ? quality === state.recommendedQuality
+        ? `推荐：${QUALITY_LABELS[quality]}`
+        : QUALITY_LABELS[quality]
+      : "当前歌曲或平台不支持此音质";
+  });
+  updateQualityHelper();
+}
+
+function syncQualityState({ track = state.selectedTrack, platform = elements.platformSelect.value, autoSelect = false } = {}) {
+  const availableQualities = resolveAvailableQualities(track, platform);
+  const recommendedQuality = availableQualities[availableQualities.length - 1] || "128k";
+
+  state.availableQualities = availableQualities;
+  state.recommendedQuality = recommendedQuality;
+
+  if (autoSelect || !availableQualities.includes(state.quality)) {
+    state.quality = recommendedQuality;
+  } else {
+    state.quality = clampQualityForPlatform(state.quality, platform);
+  }
+
+  renderQualityState();
+}
+
+function setQuality(quality) {
+  if (!state.availableQualities.includes(quality)) {
+    return;
+  }
+  state.quality = quality;
+  renderQualityState();
+}
+
 async function refreshSession() {
   const payload = await requestJson("/api/session", { method: "GET" });
   state.session = payload.authenticated ? payload : null;
@@ -129,17 +252,28 @@ async function refreshSession() {
 
 function renderAuthUi() {
   const authed = Boolean(state.session?.authenticated || state.session?.username);
+  elements.loginPanel.classList.toggle("is-authed", authed);
   elements.sessionPill.dataset.authState = authed ? "authed" : "guest";
   elements.sessionText.textContent = authed ? `${state.session.username} 已登录` : "未登录";
   elements.authChip.textContent = authed ? "UNLOCKED" : "LOCKED";
   elements.authChip.classList.toggle("is-authed", authed);
   elements.authForm.classList.toggle("hidden", authed);
   elements.activeSession.classList.toggle("hidden", !authed);
-  elements.authSummary.textContent = authed ? "已解锁，可以直接搜索、解析和下载。" : "当前未登录，接口处于锁定状态。";
 
   if (authed) {
+    elements.accessEyebrow.textContent = "Workspace";
+    elements.accessTitle.textContent = "工作台已解锁";
+    elements.accessCopy.textContent = "直接搜索，点左侧结果会自动填入平台、歌曲 ID 和当前最高建议音质。";
+    elements.headerNote.textContent = "当前已登录，聚合搜索、解析和下载链路都已解锁。";
+    elements.authSummary.textContent = "已解锁，可以直接搜索、解析和下载。";
     elements.activeUser.textContent = state.session.username;
     elements.activeExpiry.textContent = formatExpiry(state.session.expiresAt);
+  } else {
+    elements.accessEyebrow.textContent = "Access";
+    elements.accessTitle.textContent = "登录后开始使用";
+    elements.accessCopy.textContent = "输入站内账号密码后解锁聚合搜索、解析与下载。";
+    elements.headerNote.textContent = "未登录时可浏览界面，登录后可直接搜歌与下载。";
+    elements.authSummary.textContent = "当前未登录，接口处于锁定状态。";
   }
 
   renderSearchMeta();
@@ -162,7 +296,7 @@ async function handleLogin(event) {
     state.session = { authenticated: true, username: payload.username, expiresAt: payload.expiresAt };
     elements.passwordInput.value = "";
     renderAuthUi();
-    showToast("已登录", "现在可以开始搜索。");
+    showToast("已登录", "工作台已解锁，直接输入关键词开始搜索。");
   } catch (error) {
     showToast("登录失败", error.message);
   } finally {
@@ -178,6 +312,9 @@ async function handleLogout() {
     state.searchStats = null;
     state.selectedTrack = null;
     state.parseResult = null;
+    elements.platformSelect.value = "kuwo";
+    elements.songIdInput.value = "";
+    syncQualityState({ track: null, platform: "kuwo", autoSelect: true });
     renderAuthUi();
     renderSearchResults();
     renderSelectedTrack();
@@ -202,7 +339,7 @@ function renderSearchMeta() {
 
   const platformLabel = PLATFORM_LABELS[state.searchPlatform];
   if (!state.searchStats) {
-    elements.searchMeta.innerHTML = `<span class="search-meta-copy">当前模式：${escapeHtml(platformLabel)}。</span>`;
+    elements.searchMeta.innerHTML = `<span class="search-meta-copy">${escapeHtml(platformLabel)} 已就绪，输入关键词开始搜索。</span>`;
     return;
   }
 
@@ -212,6 +349,9 @@ function renderSearchMeta() {
       const count = Number(state.searchStats.groups?.[platform] || 0);
       chips.push(`<span class="tiny-pill">${escapeHtml(PLATFORM_LABELS[platform])} ${count}</span>`);
     });
+  }
+  if (state.selectedTrack) {
+    chips.push(`<span class="tiny-pill is-accent">已同步到右侧</span>`);
   }
 
   elements.searchMeta.innerHTML = `
@@ -240,8 +380,14 @@ function renderSearchResults() {
     const selected = state.selectedTrack?.platform === item.platform && state.selectedTrack?.id === item.id;
     const article = document.createElement("article");
     article.className = `result-card${selected ? " is-selected" : ""}`;
+    article.tabIndex = 0;
+    article.setAttribute("role", "button");
+    article.setAttribute("aria-label", `选择 ${item.platformLabel || PLATFORM_LABELS[item.platform]} 的 ${item.name}`);
 
     const hints = (item.quality_hint || []).map((entry) => `<span class="tiny-pill">${escapeHtml(entry)}</span>`);
+    if (item.maxQuality) {
+      hints.unshift(`<span class="tiny-pill is-accent">默认 ${escapeHtml(QUALITY_LABELS[item.maxQuality])}</span>`);
+    }
     if (item.duration) {
       hints.unshift(`<span class="tiny-pill">${escapeHtml(item.duration)}</span>`);
     }
@@ -258,7 +404,14 @@ function renderSearchResults() {
       <button class="button button-secondary select-track-button" type="button">回填</button>
     `;
 
-    article.addEventListener("click", () => selectTrack(item));
+    const choose = () => selectTrack(item);
+    article.addEventListener("click", choose);
+    article.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        choose();
+      }
+    });
     elements.searchResults.append(article);
   });
 }
@@ -268,10 +421,14 @@ function selectTrack(item) {
   state.parseResult = null;
   elements.platformSelect.value = item.platform;
   elements.songIdInput.value = item.id;
+  syncQualityState({ track: item, platform: item.platform, autoSelect: true });
+  renderSearchMeta();
   renderSearchResults();
   renderSelectedTrack();
   renderParseResult();
-  showToast("已回填", `${item.platformLabel} 的《${item.name}》已带到右侧。`);
+
+  const bestQuality = QUALITY_LABELS[state.recommendedQuality];
+  showToast("已回填", `${item.platformLabel} 的《${item.name}》已带到右侧，默认音质已切到 ${bestQuality}。`);
 
   if (window.matchMedia("(max-width: 760px)").matches) {
     elements.selectedTrack.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -280,13 +437,21 @@ function selectTrack(item) {
 
 function renderSelectedTrack() {
   if (!state.selectedTrack) {
+    elements.detailCopy.textContent = "选择歌曲后会自动填入平台、ID 和建议音质。";
     elements.selectedTrack.innerHTML = `<div class="empty-state"><strong>尚未选择歌曲</strong><p>从左侧结果里点选，平台和歌曲 ID 会自动带到右侧。</p></div>`;
     return;
   }
 
+  elements.detailCopy.textContent = `已同步歌曲信息，当前默认建议音质为 ${QUALITY_LABELS[state.recommendedQuality]}。`;
+
   const cover = state.selectedTrack.cover
     ? `<img class="selected-cover" src="${escapeAttribute(state.selectedTrack.cover)}" alt="${escapeAttribute(state.selectedTrack.name)} 封面" />`
     : `<div class="selected-cover" aria-hidden="true"></div>`;
+
+  const pills = [
+    `<span class="tiny-pill is-accent">默认 ${escapeHtml(QUALITY_LABELS[state.recommendedQuality])}</span>`,
+    ...(state.selectedTrack.quality_hint || []).map((entry) => `<span class="tiny-pill">${escapeHtml(entry)}</span>`),
+  ];
 
   elements.selectedTrack.innerHTML = `
     <div class="selected-content">
@@ -295,6 +460,7 @@ function renderSelectedTrack() {
         <strong>${escapeHtml(state.selectedTrack.name)}</strong>
         <p>${escapeHtml(state.selectedTrack.artist)}${state.selectedTrack.album ? ` · ${escapeHtml(state.selectedTrack.album)}` : ""}</p>
         <p>${escapeHtml(state.selectedTrack.platformLabel || PLATFORM_LABELS[state.selectedTrack.platform])} · ID: ${escapeHtml(state.selectedTrack.id)}</p>
+        <div class="tiny-pill-row selected-pill-row">${pills.join("")}</div>
       </div>
     </div>
   `;
@@ -381,11 +547,36 @@ async function runSearch() {
   }
 }
 
-function setQuality(quality) {
-  state.quality = quality;
-  elements.qualityHelper.textContent = QUALITY_META[quality];
-  elements.qualityGrid.querySelectorAll(".quality-chip").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.quality === quality);
+function clearSelectedTrackIfNeeded() {
+  const currentPlatform = elements.platformSelect.value;
+  const currentSongId = elements.songIdInput.value.trim();
+  const stillMatches = state.selectedTrack
+    && state.selectedTrack.platform === currentPlatform
+    && state.selectedTrack.id === currentSongId;
+
+  if (stillMatches) {
+    return;
+  }
+
+  state.selectedTrack = null;
+  state.parseResult = null;
+  renderSearchMeta();
+  renderSearchResults();
+  renderSelectedTrack();
+  renderParseResult();
+}
+
+function handlePlatformChange() {
+  clearSelectedTrackIfNeeded();
+  syncQualityState({ track: state.selectedTrack, platform: elements.platformSelect.value, autoSelect: true });
+}
+
+function handleSongIdInput() {
+  clearSelectedTrackIfNeeded();
+  syncQualityState({
+    track: state.selectedTrack,
+    platform: elements.platformSelect.value,
+    autoSelect: !state.selectedTrack,
   });
 }
 
@@ -468,7 +659,7 @@ function initialize() {
   renderSearchResults();
   renderSelectedTrack();
   renderParseResult();
-  setQuality(state.quality);
+  syncQualityState({ track: null, platform: elements.platformSelect.value, autoSelect: true });
 
   elements.themeToggle.addEventListener("click", toggleTheme);
   elements.authForm.addEventListener("submit", handleLogin);
@@ -476,6 +667,8 @@ function initialize() {
   elements.searchForm.addEventListener("submit", handleSearch);
   elements.parseForm.addEventListener("submit", handleParse);
   elements.copyLyricsButton.addEventListener("click", copyLyrics);
+  elements.platformSelect.addEventListener("change", handlePlatformChange);
+  elements.songIdInput.addEventListener("input", handleSongIdInput);
   bindPlatformSwitch();
   elements.qualityGrid.querySelectorAll(".quality-chip").forEach((button) => {
     button.addEventListener("click", () => setQuality(button.dataset.quality));

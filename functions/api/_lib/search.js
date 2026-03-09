@@ -7,12 +7,34 @@ function platformMeta(platform) {
   };
 }
 
-function qualityHints({ flac = false, q320 = false, q128 = false }) {
+function qualityMeta({ hires = false, flac = false, q320 = false, q128 = false }) {
   const hints = [];
-  if (flac) hints.push("FLAC");
-  if (q320) hints.push("320k");
-  if (q128) hints.push("128k");
-  return hints;
+  let maxQuality = "128k";
+
+  if (hires) {
+    hints.push("Hi-Res");
+    maxQuality = "flac24bit";
+  }
+  if (flac) {
+    hints.push("FLAC");
+    if (maxQuality !== "flac24bit") {
+      maxQuality = "flac";
+    }
+  }
+  if (q320) {
+    hints.push("320k");
+    if (maxQuality === "128k") {
+      maxQuality = "320k";
+    }
+  }
+  if (q128 || hints.length === 0) {
+    hints.push("128k");
+  }
+
+  return {
+    quality_hint: hints,
+    maxQuality,
+  };
 }
 
 async function fetchJson(url, init = {}) {
@@ -34,7 +56,8 @@ function normalizeNeteaseSong(item) {
     duration: durationLabel(Math.floor((item.duration || item.dt || 0) / 1000)),
     subtitle: "",
     cover: String(item.album?.picUrl || item.al?.picUrl || "").replace(/^http:\/\//i, "https://"),
-    quality_hint: qualityHints({
+    ...qualityMeta({
+      hires: Boolean(item.hr),
       flac: Boolean(item.hr || item.sq || privilegeMaxBr >= 999000),
       q320: Boolean(item.h || privilegeMaxBr >= 320000),
       q128: Boolean(item.m || item.l || privilegeMaxBr >= 128000),
@@ -115,7 +138,7 @@ async function searchKuwo(keyword, page, limit) {
     cover: item.web_albumpic_short
       ? `https://img4.kuwo.cn/star/albumcover/${item.web_albumpic_short}`
       : "",
-    quality_hint: qualityHints({
+    ...qualityMeta({
       flac: /format:mflac|format:flac/i.test(item.N_MINFO || item.MINFO || ""),
       q320: /bitrate:320/i.test(item.N_MINFO || item.MINFO || ""),
       q128: /bitrate:128/i.test(item.N_MINFO || item.MINFO || ""),
@@ -141,23 +164,6 @@ async function searchNetease(keyword, page, limit) {
 
   const attempts = [
     async () => {
-      const url = new URL("https://music.163.com/api/search/get/web");
-      url.searchParams.set("s", keyword);
-      url.searchParams.set("type", "1");
-      url.searchParams.set("offset", offset);
-      url.searchParams.set("limit", limitText);
-      url.searchParams.set("csrf_token", "");
-
-      const payload = await fetchJson(url.toString(), {
-        headers: baseHeaders,
-      });
-
-      return {
-        total: Number(payload.result?.songCount || 0),
-        songs: payload.result?.songs || [],
-      };
-    },
-    async () => {
       const payload = await fetchJson("https://music.163.com/api/cloudsearch/pc", {
         method: "POST",
         headers: {
@@ -170,6 +176,23 @@ async function searchNetease(keyword, page, limit) {
           offset,
           limit: limitText,
         }),
+      });
+
+      return {
+        total: Number(payload.result?.songCount || 0),
+        songs: payload.result?.songs || [],
+      };
+    },
+    async () => {
+      const url = new URL("https://music.163.com/api/search/get/web");
+      url.searchParams.set("s", keyword);
+      url.searchParams.set("type", "1");
+      url.searchParams.set("offset", offset);
+      url.searchParams.set("limit", limitText);
+      url.searchParams.set("csrf_token", "");
+
+      const payload = await fetchJson(url.toString(), {
+        headers: baseHeaders,
       });
 
       return {
@@ -249,7 +272,8 @@ async function searchQQ(keyword, page, limit) {
     cover: item.albummid
       ? `https://y.gtimg.cn/music/photo_new/T002R500x500M000${item.albummid}.jpg`
       : "",
-    quality_hint: qualityHints({
+    ...qualityMeta({
+      hires: Number(item.sizehires || item.sizeHiRes || 0) > 0,
       flac: Number(item.sizeflac || 0) > 0,
       q320: Number(item.size320 || 0) > 0,
       q128: Number(item.size128 || 0) > 0,
