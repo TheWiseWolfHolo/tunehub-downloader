@@ -1,6 +1,6 @@
-name = "tunehub-downloader"
+name = "holo-music"
 compatibility_date = "2026-03-09"
 pages_build_output_dir = "public"
 
 [vars]
-APP_NAME = "TuneHub Downloader"
+APP_NAME = "Holo Music"

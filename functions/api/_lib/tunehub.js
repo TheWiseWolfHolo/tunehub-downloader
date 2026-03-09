@@ -7,19 +7,19 @@ async function readUpstreamError(response) {
   const type = response.headers.get("content-type") || "";
 
   if (raw.includes("请求携带恶意参数") || raw.includes("请求拦截")) {
-    return "TuneHub 上游当前拦截了这个运行环境的请求，请优先在 Cloudflare Pages 线上环境中测试解析链路。";
+    return "上游解析服务当前拦截了这个运行环境的请求，请优先在 Cloudflare Pages 线上环境中测试解析链路。";
   }
 
   if (type.includes("application/json")) {
     try {
       const payload = JSON.parse(raw);
-      return payload?.message || payload?.error || `TuneHub 解析失败: ${response.status}`;
+      return payload?.message || payload?.error || `上游解析失败: ${response.status}`;
     } catch {
-      return `TuneHub 解析失败: ${response.status}`;
+      return `上游解析失败: ${response.status}`;
     }
   }
 
-  return `TuneHub 解析失败: ${response.status}`;
+  return `上游解析失败: ${response.status}`;
 }
 
 export async function parseTrack({ platform, id, quality, env }) {

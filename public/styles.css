@@ -61,7 +61,7 @@ button { cursor: pointer; }
   opacity: 0.35;
 }
 .shell { width: var(--shell-width); margin: 0 auto; }
-.topbar { position: sticky; top: 0; z-index: 20; padding: 18px 0 0; }
+.topbar { position: relative; z-index: 1; padding: 18px 0 0; }
 .topbar-inner {
   display: flex; justify-content: space-between; gap: 18px; align-items: flex-start;
   padding: 18px 22px; border: 1px solid var(--line); border-radius: 24px;

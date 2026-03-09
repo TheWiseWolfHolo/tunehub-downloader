@@ -1,13 +1,13 @@
-# TuneHub Downloader
+# Holo Music
 
-一个适合 Cloudflare Pages Functions 部署的 TuneHub 下载器。
+一个适合 Cloudflare Pages Functions 部署的 Holo Music 下载器。
 
 ## 能力
 
 - 默认聚合 `酷我 / 网易云 / QQ 音乐` 搜索
 - 保留按音源单独检索
 - 点击左侧结果自动把平台和歌曲 ID 回填到右侧解析区
-- 站内登录、TuneHub API Key、下载令牌都走服务端逻辑
+- 站内登录、上游 API Key、下载令牌都走服务端逻辑
 - 解析成功后直接生成同源下载链接
 
 ## 本地开发
@@ -24,7 +24,7 @@ Copy-Item .dev.vars.example .dev.vars
 TUNEHUB_SITE_USERNAME=你的站内账号
 TUNEHUB_SITE_PASSWORD=你的站内密码
 TUNEHUB_AUTH_SECRET=一串足够长的随机密钥
-TUNEHUB_API_KEY=你的 TuneHub API Key
+TUNEHUB_API_KEY=你的上游 API Key
 ```
 
 3. 启动本地开发：
@@ -61,8 +61,8 @@ Cloudflare Pages 项目建议配置：
 
 ```powershell
 npx wrangler login
-npx wrangler pages project create tunehub-downloader
-npx wrangler pages deploy public --project-name tunehub-downloader
+npx wrangler pages project create holo-music
+npx wrangler pages deploy public --project-name holo-music
 ```
 
 ## 目录结构

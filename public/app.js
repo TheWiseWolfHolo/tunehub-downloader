@@ -270,7 +270,7 @@ function renderAuthUi() {
     elements.activeExpiry.textContent = formatExpiry(state.session.expiresAt);
   } else {
     elements.accessEyebrow.textContent = "Access";
-    elements.accessTitle.textContent = "登录后开始使用";
+    elements.accessTitle.textContent = "登录后解锁工作台";
     elements.accessCopy.textContent = "输入站内账号密码后解锁聚合搜索、解析与下载。";
     elements.headerNote.textContent = "未登录时可浏览界面，登录后可直接搜歌与下载。";
     elements.authSummary.textContent = "当前未登录，接口处于锁定状态。";
